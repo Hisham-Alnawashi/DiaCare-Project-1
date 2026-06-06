@@ -152,8 +152,57 @@ const dictionary = {
     'type2': { en: 'Type 2', ar: 'النوع 2' },
     'gestational': { en: 'Gestational', ar: 'سكري الحمل' },
     'pediatric': { en: 'Pediatric', ar: 'أطفال' },
-    'signUpBtn': { en: 'Create Account', ar: 'إنشاء حساب' }
+    'signUpBtn': { en: 'Create Account', ar: 'إنشاء حساب' },
+
+    // Signup form labels (added for i18n completion)
+    'firstNameLabel': { en: 'First Name', ar: 'الاسم الأول' },
+    'lastNameLabel': { en: 'Last Name', ar: 'اسم العائلة' },
+    'dobLabel': { en: 'Date of Birth', ar: 'تاريخ الميلاد' },
+    'diabetesTypeLabel': { en: 'Diabetes Type', ar: 'نوع السكري' },
+    'selectType': { en: 'Select type...', ar: 'حدد النوع...' },
+    'signUpHeader': { en: 'Create an account', ar: 'إنشاء حساب' },
+    'signUpSubtitle': { en: 'Join Dia Care to start managing your diabetes smarter.', ar: 'انضم إلى Dia Care وابدأ بإدارة السكري بذكاء.' },
+    'confirmPasswordLabel': { en: 'Confirm Password', ar: 'تأكيد كلمة المرور' },
+    'firstNamePlaceholder': { en: 'e.g., John', ar: 'مثال: أحمد' },
+    'lastNamePlaceholder': { en: 'e.g., Doe', ar: 'مثال: علي' },
+    'passwordPlaceholderSignup': { en: 'Create a strong password', ar: 'أنشئ كلمة مرور قوية' },
+    'confirmPasswordPlaceholder': { en: 'Re-enter your password', ar: 'أعد إدخال كلمة المرور' },
+    'dobPlaceholder': { en: 'YYYY-MM-DD', ar: 'سنة-شهر-يوم' },
+    'emailPlaceholder': { en: 'name@example.com', ar: 'name@example.com' },
+    'passwordPlaceholder': { en: '••••••••', ar: '••••••••' },
+    'termsText': { en: 'By signing up, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.', ar: 'بإنشائك حساباً، فأنت توافق على <a href="#">شروط الاستخدام</a> و<a href="#">سياسة الخصوصية</a>.' },
+
+    // Social login
+    'orContinueWith': { en: 'or continue with', ar: 'أو تابع باستخدام' },
+    'continueWithGoogle': { en: 'Continue with Google', ar: 'متابعة باستخدام Google' },
+    'signUpWithGoogle': { en: 'Sign up with Google', ar: 'إنشاء حساب باستخدام Google' },
+
+    // Password visibility
+    'showPassword': { en: 'Show password', ar: 'إظهار كلمة المرور' },
+    'hidePassword': { en: 'Hide password', ar: 'إخفاء كلمة المرور' },
+
+    // Password strength
+    'strengthWeak': { en: 'Weak', ar: 'ضعيفة' },
+    'strengthFair': { en: 'Fair', ar: 'متوسطة' },
+    'strengthStrong': { en: 'Strong', ar: 'قوية' },
+    'passwordMismatch': { en: 'Passwords do not match', ar: 'كلمات المرور غير متطابقة' },
+
+    // Forgot password toast
+    'resetLinkSent': { en: 'Password reset link sent to {email}', ar: 'تم إرسال رابط إعادة التعيين إلى {email}' },
+
+    // Inline validation
+    'invalidEmail': { en: 'Please enter a valid email address', ar: 'الرجاء إدخال بريد إلكتروني صالح' },
+
+    // ARIA labels
+    'ariaToggleTheme': { en: 'Toggle dark mode', ar: 'تبديل الوضع الداكن' },
+    'ariaSwitchLanguage': { en: 'Switch language', ar: 'تبديل اللغة' },
+    'ariaShowPassword': { en: 'Show password', ar: 'إظهار كلمة المرور' },
+    'ariaHidePassword': { en: 'Hide password', ar: 'إخفاء كلمة المرور' }
 };
+
+// Expose the dictionary to the global scope so other scripts (script.js)
+// can read translated strings for dynamically generated UI (errors, toasts, etc.)
+window.dictionary = dictionary;
 
 function applyTranslations(lang) {
     document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -191,6 +240,22 @@ function applyTranslations(lang) {
         const key = el.getAttribute('data-i18n-opt');
         if (dictionary[key]) {
             el.textContent = dictionary[key][lang];
+        }
+    });
+
+    // data-i18n-html: use innerHTML so links inside the text survive translation
+    document.querySelectorAll('[data-i18n-html]').forEach(el => {
+        const key = el.getAttribute('data-i18n-html');
+        if (dictionary[key]) {
+            el.innerHTML = dictionary[key][lang];
+        }
+    });
+
+    // data-i18n-aria: translate aria-label attributes
+    document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+        const key = el.getAttribute('data-i18n-aria');
+        if (dictionary[key]) {
+            el.setAttribute('aria-label', dictionary[key][lang]);
         }
     });
 }

@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -149,99 +149,448 @@ document.addEventListener('DOMContentLoaded', () => {
     // }
     */
 
-    // Form submissions
+    // ==========================================
+    // Auth-page helpers (UI feedback, validation)
+    // ==========================================
+    const ERROR_MAP = {
+        'auth/invalid-credential':     { en: 'Email or password is incorrect.', ar: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' },
+        'auth/user-not-found':         { en: 'No account found with this email.', ar: 'لا يوجد حساب مرتبط بهذا البريد.' },
+        'auth/wrong-password':         { en: 'Incorrect password.', ar: 'كلمة المرور غير صحيحة.' },
+        'auth/invalid-email':          { en: 'Please enter a valid email address.', ar: 'الرجاء إدخال بريد إلكتروني صالح.' },
+        'auth/email-already-in-use':   { en: 'An account with this email already exists. Try logging in.', ar: 'يوجد حساب مرتبط بهذا البريد. جرّب تسجيل الدخول.' },
+        'auth/weak-password':          { en: 'Password must be at least 8 characters.', ar: 'يجب أن تكون كلمة المرور 8 أحرف على الأقل.' },
+        'auth/too-many-requests':      { en: 'Too many attempts. Please wait a few minutes.', ar: 'محاولات كثيرة. الرجاء الانتظار بضع دقائق.' },
+        'auth/network-request-failed': { en: 'Network error. Check your connection.', ar: 'خطأ في الشبكة. تحقق من اتصالك.' },
+        'auth/popup-closed-by-user':   { en: 'Google sign-in was cancelled.', ar: 'تم إلغاء تسجيل الدخول عبر Google.' },
+        'auth/operation-not-allowed':  { en: 'Google sign-in is not enabled. Please contact support.', ar: 'تسجيل الدخول عبر Google غير مفعّل. الرجاء التواصل مع الدعم.' }
+    };
+    const FALLBACK_ERROR = { en: 'An unexpected error occurred.', ar: 'حدث خطأ غير متوقع.' };
+
+    function getLang() {
+        return document.documentElement.getAttribute('lang') === 'ar' ? 'ar' : 'en';
+    }
+    function tr(messageOrKey) {
+        // Accepts either a plain string or a key from ERROR_MAP
+        const lang = getLang();
+        if (ERROR_MAP[messageOrKey]) return ERROR_MAP[messageOrKey][lang];
+        if (messageOrKey) return messageOrKey;
+        return FALLBACK_ERROR[lang];
+    }
+    function isValidEmail(s) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s || '');
+    }
+    function showFormError(formEl, code) {
+        if (!formEl) return;
+        const banner = formEl.querySelector('.form-error');
+        if (!banner) return;
+        banner.hidden = false;
+        const textEl = banner.querySelector('.error-text');
+        if (textEl) textEl.textContent = tr(code);
+        banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        formEl.classList.remove('shake');
+        // Force reflow to restart the animation
+        void formEl.offsetWidth;
+        formEl.classList.add('shake');
+    }
+    function clearFormError(formEl) {
+        if (!formEl) return;
+        const banner = formEl.querySelector('.form-error');
+        if (banner) banner.hidden = true;
+        formEl.classList.remove('shake');
+    }
+    function setFieldState(input, ok, message) {
+        if (!input) return;
+        input.classList.toggle('is-valid', !!ok);
+        input.classList.toggle('is-invalid', !ok);
+        const hint = input.parentElement.parentElement?.querySelector('.field-hint')
+            || input.parentElement?.querySelector('.field-hint')
+            || null;
+        if (hint) {
+            hint.textContent = message || '';
+            hint.classList.toggle('is-error', !ok);
+            hint.classList.toggle('is-ok', !!ok);
+        }
+    }
+    function showToast(message, type) {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+        const t = document.createElement('div');
+        t.className = 'toast is-' + (type || 'info');
+        t.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        t.textContent = message;
+        container.appendChild(t);
+        setTimeout(() => {
+            t.style.transition = 'opacity 0.25s ease';
+            t.style.opacity = '0';
+            setTimeout(() => t.remove(), 250);
+        }, 4000);
+    }
+    function setButtonLoading(btn, loading) {
+        if (!btn) return;
+        btn.classList.toggle('is-loading', !!loading);
+        btn.disabled = !!loading;
+    }
+
+    // ==========================================
+    // Tab keyboard navigation (WAI-ARIA tabs)
+    // ==========================================
+    const tabLogin = document.getElementById('tab-login');
+    const tabSignup = document.getElementById('tab-signup');
+    function activateTab(tab) {
+        const isLogin = tab === tabLogin;
+        [tabLogin, tabSignup].forEach(t => {
+            t.classList.toggle('active', t === tab);
+            t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+            t.setAttribute('tabindex', t === tab ? '0' : '-1');
+        });
+        document.getElementById('form-login').classList.toggle('form-hidden', !isLogin);
+        document.getElementById('form-login').classList.toggle('form-active', isLogin);
+        document.getElementById('form-signup').classList.toggle('form-hidden', isLogin);
+        document.getElementById('form-signup').classList.toggle('form-active', !isLogin);
+        if (isLogin) {
+            document.getElementById('login-email').focus();
+        } else {
+            document.getElementById('signup-fname').focus();
+        }
+    }
+    [tabLogin, tabSignup].forEach(tab => {
+        if (!tab) return;
+        tab.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                e.preventDefault();
+                activateTab(tab === tabLogin ? tabSignup : tabLogin);
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                activateTab(tabLogin);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                activateTab(tabSignup);
+            }
+        });
+    });
+
+    // ==========================================
+    // Password show/hide toggles
+    // ==========================================
+    document.querySelectorAll('.toggle-pw').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const wrapper = btn.closest('.password-wrapper');
+            const input = wrapper?.querySelector('input');
+            if (!input) return;
+            const showing = input.type === 'text';
+            input.type = showing ? 'password' : 'text';
+            btn.setAttribute('aria-pressed', showing ? 'false' : 'true');
+            const lang = getLang();
+            const key = showing ? 'ariaShowPassword' : 'ariaHidePassword';
+            if (window.dictionary && window.dictionary[key]) {
+                btn.setAttribute('aria-label', window.dictionary[key][lang]);
+            }
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = showing ? 'fas fa-eye' : 'fas fa-eye-slash';
+        });
+    });
+
+    // ==========================================
+    // Password strength meter
+    // ==========================================
+    const signupPassword = document.getElementById('signup-password');
+    const strengthBar = document.getElementById('strength-bar');
+    const strengthLabel = document.getElementById('strength-label');
+    function computeStrength(v) {
+        let score = 0;
+        if (v.length >= 8) score++;
+        if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+        if (/\d/.test(v) || /[^A-Za-z0-9]/.test(v)) score++;
+        return score;
+    }
+    function refreshStrength() {
+        if (!signupPassword || !strengthBar || !strengthLabel) return;
+        const v = signupPassword.value;
+        if (!v) {
+            strengthBar.className = 'strength-bar';
+            strengthLabel.textContent = '';
+            return;
+        }
+        const score = computeStrength(v);
+        const lang = getLang();
+        let cls = 'weak', key = 'strengthWeak';
+        if (score === 2) { cls = 'fair'; key = 'strengthFair'; }
+        else if (score >= 3) { cls = 'strong'; key = 'strengthStrong'; }
+        strengthBar.className = 'strength-bar ' + cls;
+        strengthLabel.textContent = (window.dictionary && window.dictionary[key])
+            ? window.dictionary[key][lang]
+            : (lang === 'ar' ? 'قوة كلمة المرور' : 'Strength');
+    }
+    signupPassword?.addEventListener('input', refreshStrength);
+
+    // ==========================================
+    // Confirm-password match check
+    // ==========================================
+    const signupConfirm = document.getElementById('signup-password-confirm');
+    function refreshConfirm() {
+        if (!signupConfirm || !signupPassword) return;
+        if (!signupConfirm.value) {
+            signupConfirm.classList.remove('is-valid', 'is-invalid');
+            return;
+        }
+        const ok = signupConfirm.value === signupPassword.value;
+        const lang = getLang();
+        const msg = window.dictionary && window.dictionary.passwordMismatch
+            ? window.dictionary.passwordMismatch[lang]
+            : (lang === 'ar' ? 'كلمات المرور غير متطابقة' : 'Passwords do not match');
+        setFieldState(signupConfirm, ok, ok ? '' : msg);
+    }
+    signupConfirm?.addEventListener('input', refreshConfirm);
+    signupPassword?.addEventListener('input', refreshConfirm);
+
+    // ==========================================
+    // Real-time email validation
+    // ==========================================
+    ['login-email', 'signup-email'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('blur', () => {
+            const ok = isValidEmail(el.value);
+            if (!el.value) {
+                el.classList.remove('is-valid', 'is-invalid');
+                return;
+            }
+            const lang = getLang();
+            const msg = ok ? '' : (window.dictionary && window.dictionary.invalidEmail)
+                ? window.dictionary.invalidEmail[lang]
+                : (lang === 'ar' ? 'بريد غير صالح' : 'Invalid email');
+            setFieldState(el, ok, msg);
+        });
+        el.addEventListener('input', () => {
+            el.classList.remove('is-valid', 'is-invalid');
+        });
+    });
+
+    // ==========================================
+    // Forgot password (inline, sends reset email)
+    // ==========================================
+    const forgotLink = document.getElementById('forgot-password');
+    const loginFormEl = document.getElementById('form-login');
+    forgotLink?.addEventListener('click', async (e) => {
+        e.preventDefault();
+        clearFormError(loginFormEl);
+        const emailEl = document.getElementById('login-email');
+        const email = (emailEl?.value || '').trim();
+        if (!isValidEmail(email)) {
+            showFormError(loginFormEl, 'auth/invalid-email');
+            emailEl?.focus();
+            return;
+        }
+        try {
+            await sendPasswordResetEmail(auth, email);
+            const lang = getLang();
+            const tmpl = (window.dictionary && window.dictionary.resetLinkSent)
+                ? window.dictionary.resetLinkSent[lang]
+                : (lang === 'ar' ? `تم إرسال رابط إعادة التعيين إلى ${email}` : `Password reset link sent to ${email}`);
+            showToast(tmpl.replace('{email}', email), 'success');
+        } catch (err) {
+            console.error('Reset password error:', err);
+            showFormError(loginFormEl, err.code || 'auth/network-request-failed');
+        }
+    });
+
+    // ==========================================
+    // Login submit
+    // ==========================================
     const loginForm = document.getElementById('form-login');
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
+            clearFormError(loginForm);
 
-            if (!email || !password) {
+            const email = loginForm.loginEmail.value.trim();
+            const password = loginForm.password.value;
+            const remember = loginForm.rememberMe.checked;
+
+            if (!isValidEmail(email)) {
+                showFormError(loginForm, 'auth/invalid-email');
+                return;
+            }
+            if (!password) {
+                const lang = getLang();
+                showFormError(loginForm, lang === 'ar' ? 'يرجى إدخال كلمة المرور.' : 'Please enter your password.');
                 return;
             }
 
-            const btn = e.target.querySelector('button[type="submit"]');
-            const isArabic = document.documentElement.getAttribute('lang') === 'ar';
-            btn.textContent = isArabic ? 'جاري تسجيل الدخول...' : 'Logging In...';
-            btn.disabled = true;
+            const btn = loginForm.querySelector('button[type="submit"]');
+            setButtonLoading(btn, true);
 
             try {
+                await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
-                // جلب بيانات المستخدم من Firestore
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     localStorage.setItem('diacare_user_fname', userData.fname);
                     localStorage.setItem('diacare_diabetes_type', userData.type);
                 } else {
-                    localStorage.setItem('diacare_user_fname', 'مستخدم');
+                    localStorage.setItem('diacare_user_fname', getLang() === 'ar' ? 'مستخدم' : 'User');
                 }
-
                 localStorage.setItem('diacare_user_email', user.email);
 
-                // مزامنة السجلات من قاعدة البيانات (السكر، الوزن، الوجبات)
                 await window.DiaCareDB.syncLogs('db_glucose');
                 await window.DiaCareDB.syncLogs('db_weight');
                 await window.DiaCareDB.syncLogs('db_meals');
 
-                window.location.href = 'dashboard.html';
+                const lang = getLang();
+                showToast(lang === 'ar' ? 'تم تسجيل الدخول بنجاح!' : 'Signed in successfully!', 'success');
+                setTimeout(() => { window.location.href = 'dashboard.html'; }, 350);
             } catch (error) {
-                console.error("Login error:", error);
-                alert(isArabic ? 'فشل تسجيل الدخول. يرجى التحقق من البريد الإلكتروني وكلمة المرور.' : 'Login failed. Please check your credentials.');
-                btn.textContent = isArabic ? 'تسجيل الدخول' : 'Sign In';
-                btn.disabled = false;
+                console.error('Login error:', error);
+                showFormError(loginForm, error.code || 'auth/invalid-credential');
+                setButtonLoading(btn, false);
             }
         });
     }
 
+    // ==========================================
+    // Signup submit
+    // ==========================================
     const signupFormElement = document.getElementById('form-signup');
     if (signupFormElement) {
         signupFormElement.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const fname = document.getElementById('signup-fname').value;
-            const type = document.getElementById('signup-type').value;
-            const email = document.getElementById('signup-email').value;
-            const password = document.getElementById('signup-password').value;
+            clearFormError(signupFormElement);
 
-            if (!fname || !type || !email || !password) {
-                return; // Validation handled by HTML required attrs
+            const fname = signupFormElement.fname.value.trim();
+            const lname = signupFormElement.lname.value.trim();
+            const email = signupFormElement.signupEmail.value.trim();
+            const password = signupFormElement.signupPassword.value;
+            const confirm = signupFormElement.signupPasswordConfirm.value;
+            const dob = signupFormElement.dob.value;
+            const type = signupFormElement.diabetesType.value;
+            const lang = getLang();
+
+            if (!fname || !lname) {
+                showFormError(signupFormElement, lang === 'ar' ? 'يرجى إدخال الاسم الكامل.' : 'Please enter your full name.');
+                return;
+            }
+            if (!isValidEmail(email)) {
+                showFormError(signupFormElement, 'auth/invalid-email');
+                return;
+            }
+            if (password.length < 8) {
+                showFormError(signupFormElement, 'auth/weak-password');
+                return;
+            }
+            if (password !== confirm) {
+                const tmpl = window.dictionary && window.dictionary.passwordMismatch
+                    ? window.dictionary.passwordMismatch[lang]
+                    : 'Passwords do not match';
+                showFormError(signupFormElement, lang === 'ar' ? 'تأكد من تطابق كلمتي المرور.' : 'Please make sure both passwords match.');
+                signupFormElement.signupPasswordConfirm.focus();
+                return;
+            }
+            if (!dob) {
+                showFormError(signupFormElement, lang === 'ar' ? 'يرجى إدخال تاريخ الميلاد.' : 'Please enter your date of birth.');
+                return;
+            }
+            if (!type) {
+                showFormError(signupFormElement, lang === 'ar' ? 'يرجى اختيار نوع السكري.' : 'Please select your diabetes type.');
+                return;
             }
 
-            const btn = e.target.querySelector('button[type="submit"]');
-            const isArabic = document.documentElement.getAttribute('lang') === 'ar';
-            btn.textContent = isArabic ? 'جاري إنشاء الحساب...' : 'Creating Account...';
-            btn.disabled = true;
+            const btn = signupFormElement.querySelector('button[type="submit"]');
+            setButtonLoading(btn, true);
 
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
-                // حفظ بيانات المستخدم الإضافية في Firestore
                 await setDoc(doc(db, "users", user.uid), {
                     fname: fname,
+                    lname: lname,
                     type: type,
                     email: email,
                     createdAt: new Date().toISOString()
                 });
 
-                // الحفظ في LocalStorage ليعمل الموقع كما هو متوقع
                 localStorage.setItem('diacare_user_fname', fname);
                 localStorage.setItem('diacare_diabetes_type', type);
                 localStorage.setItem('diacare_user_email', email);
-                // تم حذف تخزين كلمة المرور محلياً لزيادة الأمان
 
-                window.location.href = 'dashboard.html';
+                showToast(lang === 'ar' ? 'تم إنشاء الحساب بنجاح!' : 'Account created successfully!', 'success');
+                setTimeout(() => { window.location.href = 'dashboard.html'; }, 500);
             } catch (error) {
-                console.error("Signup error:", error);
-                alert(isArabic ? 'حدث خطأ أثناء إنشاء الحساب. قد يكون البريد مستخدماً بالفعل أو كلمة المرور ضعيفة.' : 'Error creating account. Email might be in use or password too weak.');
-                btn.textContent = isArabic ? 'إنشاء حساب' : 'Create Account';
-                btn.disabled = false;
+                console.error('Signup error:', error);
+                showFormError(signupFormElement, error.code || 'auth/email-already-in-use');
+                setButtonLoading(btn, false);
             }
         });
     }
+
+    // ==========================================
+    // Google sign-in (popup on desktop, redirect on mobile)
+    // ==========================================
+    const googleBtn = document.getElementById('google-login');
+    async function handleGoogleProfile(user) {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (!userDoc.exists()) {
+            const displayName = user.displayName || 'User';
+            const fname = displayName.split(' ')[0] || 'User';
+            await setDoc(doc(db, "users", user.uid), {
+                fname: fname,
+                type: 'type1',
+                email: user.email,
+                createdAt: new Date().toISOString()
+            });
+            localStorage.setItem('diacare_user_fname', fname);
+            localStorage.setItem('diacare_diabetes_type', 'type1');
+        } else {
+            const userData = userDoc.data();
+            localStorage.setItem('diacare_user_fname', userData.fname);
+            localStorage.setItem('diacare_diabetes_type', userData.type);
+        }
+        localStorage.setItem('diacare_user_email', user.email);
+    }
+    async function finishGoogleSignIn(user) {
+        await handleGoogleProfile(user);
+        await window.DiaCareDB.syncLogs('db_glucose');
+        await window.DiaCareDB.syncLogs('db_weight');
+        await window.DiaCareDB.syncLogs('db_meals');
+        const lang = getLang();
+        showToast(lang === 'ar' ? 'تم تسجيل الدخول عبر Google' : 'Signed in with Google', 'success');
+        setTimeout(() => { window.location.href = 'dashboard.html'; }, 350);
+    }
+    googleBtn?.addEventListener('click', async () => {
+        clearFormError(loginFormEl);
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        setButtonLoading(googleBtn, true);
+        try {
+            const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            if (isMobile) {
+                await signInWithRedirect(auth, provider);
+                // Result handled on next page load via getRedirectResult below
+            } else {
+                const result = await signInWithPopup(auth, provider);
+                if (result?.user) await finishGoogleSignIn(result.user);
+            }
+        } catch (err) {
+            console.error('Google sign-in error:', err);
+            showFormError(loginFormEl, err.code || 'auth/popup-closed-by-user');
+            setButtonLoading(googleBtn, false);
+        }
+    });
+
+    // Handle redirect result (mobile flow) on page load
+    getRedirectResult(auth).then(async (result) => {
+        if (result?.user) {
+            await finishGoogleSignIn(result.user);
+        }
+    }).catch((err) => {
+        if (err && err.code) {
+            console.error('Redirect result error:', err);
+            showFormError(loginFormEl, err.code);
+        }
+    });
 
     // --- AI Chatbot Shared Logic for Index ---
     if (window.chatBotAttached) return;
