@@ -1,3 +1,7 @@
+import { auth, db } from "./firebase-config.js";
+import { collection, addDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- Shared Logic: Theme & Language ---
     const themeToggleBtn = document.getElementById('theme-toggle');
@@ -166,8 +170,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Data Rendering Logic (Stats & Charts) ---
     let reportChartInstance = null;
-    function renderReportsData() {
+    function renderReportsData(resolvedUser) {
         const glucoseLogs = JSON.parse(localStorage.getItem('db_glucose') || '[]');
+        console.log("DEBUG: renderReportsData fired. Logs length:", glucoseLogs.length, "Current User:", auth.currentUser);
 
         if (glucoseLogs.length > 0) {
             let sum = 0, normal = 0, high = 0, low = 0;
@@ -202,6 +207,31 @@ document.addEventListener('DOMContentLoaded', () => {
             setProgress('report-normal', normalPct);
             setProgress('report-high', highPct);
             setProgress('report-low', lowPct);
+
+            // Save report summary to Firestore
+            const activeUser = resolvedUser || auth.currentUser;
+            let userUid = activeUser ? activeUser.uid : null;
+
+            if (!userUid) {
+                console.log("DEBUG: No authenticated user found, using fallback Local UID for testing.");
+                userUid = localStorage.getItem('diacare_user_id') || "mock_developer_user_id";
+            }
+
+            if (userUid) {
+                const today = new Date().toISOString().split('T')[0];
+                console.log("DEBUG: Attempting to save report for UID:", userUid);
+                setDoc(doc(db, `users/${userUid}/reports`, today), {
+                    avgGlucose: avg,
+                    estimatedA1c: parseFloat(a1c),
+                    timeInRange: { normal: normalPct, high: highPct, low: lowPct },
+                    totalReadings: total,
+                    computedAt: new Date().toISOString()
+                })
+                .then(() => console.log("DEBUG: Report successfully saved to Firestore!"))
+                .catch(err => console.error('CRITICAL FIRESTORE ERROR:', err));
+            } else {
+                console.log("DEBUG: Report save skipped because no resolved user is available.");
+            }
         }
 
         const ctx = document.getElementById('monthlyTrendChart');
@@ -291,6 +321,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('languageChanged', renderReportsData);
     document.addEventListener('logsSynced', renderReportsData);
     document.addEventListener('userDataLoaded', renderReportsData);
+
+    // Auth listener (registers once per page load)
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            console.log("DEBUG: Global Auth Resolved! User UID:", user.uid);
+            renderReportsData(user);
+        } else {
+            console.log("DEBUG: Global Auth resolved but no user is signed in.");
+        }
+    });
 
     // --- PDF Export Logic ---
     const exportBtn = document.getElementById('btn-export-pdf');

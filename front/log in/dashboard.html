@@ -71,7 +71,7 @@
     </style>
 </head>
 
-<body class="dashboard-body">
+<body class="dashboard-body hamburger-nav">
     <div class="dashboard-container">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
@@ -111,31 +111,37 @@
 
             <a href="#" id="logout-btn" class="nav-item" style="margin-top: auto; color: var(--error);"
                 data-i18n="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a>
-        </aside>
+            </aside>
+            <!-- Sidebar overlay backdrop for mobile -->
+            <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
-        <!-- Main Content Area -->
-        <main class="main-content">
+            <!-- Main Content Area -->
+            <main class="main-content">
             <header class="main-header">
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <!-- New Modern DiaCare Logo (Header Top-Left) -->
-                    <div class="header-logo" style="display: flex; align-items: center; gap: 0.5rem;">
-                        <svg width="36" height="36" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                            <!-- Minimalist D in Vibrant Purple -->
-                            <path d="M 15 10 L 55 10 C 100 10 100 90 55 90 L 15 90 Z" fill="var(--primary-color)" />
-                            <!-- Subtly integrated Blood Drop acting as the 'D' counter -->
-                            <path d="M 55 25 C 55 25 75 55 75 70 A 20 20 0 0 1 35 70 C 35 55 55 25 55 25 Z"
-                                fill="#ff6b6b" />
-                        </svg>
-                        <h1
-                            style="margin: 0; font-family: 'Inter', sans-serif; font-weight: 800; font-size: 1.75rem; letter-spacing: -0.5px; color: var(--text-main);">
-                            DiaCare</h1>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <!-- Hamburger Button (mobile only) -->
+                        <button class="hamburger-btn" id="hamburger-btn" aria-label="Toggle navigation menu">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                        <!-- New Modern DiaCare Logo (Header Top-Left) -->
+                        <div class="header-logo" style="display: flex; align-items: center; gap: 0.5rem;">
+                            <svg width="36" height="36" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                <!-- Minimalist D in Vibrant Purple -->
+                                <path d="M 15 10 L 55 10 C 100 10 100 90 55 90 L 15 90 Z" fill="var(--primary-color)" />
+                                <!-- Subtly integrated Blood Drop acting as the 'D' counter -->
+                                <path d="M 55 25 C 55 25 75 55 75 70 A 20 20 0 0 1 35 70 C 35 55 55 25 55 25 Z"
+                                    fill="#ff6b6b" />
+                            </svg>
+                            <h1
+                                style="margin: 0; font-family: 'Inter', sans-serif; font-weight: 800; font-size: 1.75rem; letter-spacing: -0.5px; color: var(--text-main);">
+                                DiaCare</h1>
+                        </div>
+
+                        <span style="color: var(--border); font-size: 1.5rem; margin: 0 0.5rem;">|</span>
+
+                        <h2 style="margin: 0; font-size: 1.25rem; font-weight: 500; color: var(--text-muted);"
+                            data-i18n="dailyLogging">Daily Logging</h2>
                     </div>
-
-                    <span style="color: var(--border); font-size: 1.5rem; margin: 0 0.5rem;">|</span>
-
-                    <h2 style="margin: 0; font-size: 1.25rem; font-weight: 500; color: var(--text-muted);"
-                        data-i18n="dailyLogging">Daily Logging</h2>
-                </div>
 
                 <div class="header-controls" style="display: flex; align-items: center; gap: 1rem;">
                     <!-- Theme Toggle -->
@@ -781,7 +787,7 @@
                         mealInput.value = '';
                         simulateMealTracking();
                         const isAr = document.documentElement.getAttribute('lang') === 'ar';
-                        alert(isAr ? 'تم تسجيل الوجبة بنجاح وحفظها في السجل التاريخي!' : 'Meal logged successfully and added to history!');
+                        window.showToast(isAr ? 'تم تسجيل الوجبة بنجاح وحفظها في السجل التاريخي!' : 'Meal logged successfully and added to history!', 'success');
                     }
                 });
             }
@@ -798,7 +804,7 @@
                         });
                     }
                     const isAr = document.documentElement.getAttribute('lang') === 'ar';
-                    alert(isAr ? 'تم حفظ قراءة السكر بنجاح في السجل التاريخي للتقارير!' : 'Glucose reading saved to history log for reports!');
+                    window.showToast(isAr ? 'تم حفظ قراءة السكر بنجاح في السجل التاريخي للتقارير!' : 'Glucose reading saved to history log for reports!', 'success');
                     if (typeof renderDailyChart === 'function') renderDailyChart();
                 }
                 updateDashboard();
@@ -826,7 +832,7 @@
                         });
                     }
                     const isAr = document.documentElement.getAttribute('lang') === 'ar';
-                    alert(isAr ? 'تم حفظ الوزن بنجاح في السجل التاريخي!' : 'Weight saved to history log!');
+                    window.showToast(isAr ? 'تم حفظ الوزن بنجاح في السجل التاريخي!' : 'Weight saved to history log!', 'success');
                 }
                 updateDashboard();
             });
@@ -1098,7 +1104,7 @@
                     const isArabic = document.documentElement.getAttribute('lang') === 'ar';
 
                     if (isNaN(sugarVal)) {
-                        alert(isArabic ? "يرجى إدخال نسبة السكر الحالية في قسم السجل أولاً." : "Please enter your current blood sugar in the log section first.");
+                        window.showToast(isArabic ? "يرجى إدخال نسبة السكر الحالية في قسم السجل أولاً." : "Please enter your current blood sugar in the log section first.", 'error');
                         return;
                     }
 
@@ -1220,6 +1226,33 @@
                 });
             }
 
+            // --- Hamburger Menu Toggle ---
+            const hamburgerBtn = document.getElementById('hamburger-btn');
+            const sidebarOverlay = document.getElementById('sidebar-overlay');
+            const sidebar = document.querySelector('.sidebar');
+
+            if (hamburgerBtn && sidebar && sidebarOverlay) {
+                hamburgerBtn.addEventListener('click', () => {
+                    sidebar.classList.toggle('active');
+                    sidebarOverlay.classList.toggle('active');
+                    document.body.classList.toggle('sidebar-open');
+                });
+
+                sidebarOverlay.addEventListener('click', () => {
+                    sidebar.classList.remove('active');
+                    sidebarOverlay.classList.remove('active');
+                    document.body.classList.remove('sidebar-open');
+                });
+
+                document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        sidebar.classList.remove('active');
+                        sidebarOverlay.classList.remove('active');
+                        document.body.classList.remove('sidebar-open');
+                    });
+                });
+            }
+
             // تحديث الواجهة عند جلب البيانات من Firebase
             document.addEventListener('userDataLoaded', () => {
                 const storedType = localStorage.getItem('diacare_diabetes_type');
@@ -1296,6 +1329,7 @@
     </script>
     <script src="i18n.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
     <script type="module" src="script.js"></script>
 </body>
 

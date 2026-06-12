@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const isArabic = document.documentElement.getAttribute('lang') === 'ar';
-                alert(isArabic ? 'تم حفظ الاسم بنجاح!' : 'Name updated successfully!');
+                window.showToast(isArabic ? 'تم حفظ الاسم بنجاح!' : 'Name updated successfully!', 'success');
             }
         });
     }
@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (passInput && passInput.value.trim() !== '') {
                 const isArabic = document.documentElement.getAttribute('lang') === 'ar';
                 // We simulate saving for now. If you want this to work with Firebase, it will be added in script.js
-                alert(isArabic ? 'تم طلب تغيير كلمة المرور! (يعمل مع قاعدة البيانات)' : 'Password change requested! (Works with Backend)');
+                window.showToast(isArabic ? 'تم طلب تغيير كلمة المرور! (يعمل مع قاعدة البيانات)' : 'Password change requested! (Works with Backend)', 'success');
                 passInput.value = '';
             }
         });

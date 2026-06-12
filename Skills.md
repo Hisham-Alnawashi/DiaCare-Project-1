@@ -79,7 +79,7 @@ There is **no `src/`, no `dist/`, no `assets/`, no `tests/`** folder. Everything
 - Auto-redirect-to-dashboard block in `script.js:142-150` is **commented out** (intentionally). Don't re-enable without re-testing.
 - Inline `<script>` at the bottom handles the theme icon swap; this is duplicated across pages.
 
-### 3.2 `front/log in/dashboard.html` (1302 lines — the largest file)
+### 3.2 `front/log in/dashboard.html` (1302→1304 lines — the largest file)
 **Purpose:** The heart of the app. Sidebar + 5 cards (glucose, weight/BMI, meal, bolus, suggestion) + 1 chart + chatbot widget.
 **Key IDs:**
 - `#user-diabetes-type` (sidebar selector — drives every threshold calculation)
@@ -113,7 +113,7 @@ There is **no `src/`, no `dist/`, no `assets/`, no `tests/`** folder. Everything
 **Purpose:** Monthly overview card, time-in-range bar, 30-day line chart, PDF export.
 **Key IDs:** `#report-avg-glucose`, `#report-est-a1c`, `#monthlyTrendChart`, `#btn-export-pdf`
 **External libs (CDN):** `chart.js`, `html2pdf.js` (load before `reports.js`).
-**Scripts:** `i18n.js`, then CDN libs, then `reports.js`, then `script.js` (module).
+**Scripts:** `i18n.js` (classic), then CDN libs, then `reports.js` (module), then `script.js` (module).
 **Gotchas:**
 - Time-in-range percentage bars (`#report-normal-pct`, `#report-high-pct`, `#report-low-pct` and corresponding `-bar` elements) are **referenced in `reports.js:197-204` but do not exist in the HTML** — the static bars in HTML use inline width styles. Stats will silently fail to update.
 
@@ -121,9 +121,9 @@ There is **no `src/`, no `dist/`, no `assets/`, no `tests/`** folder. Everything
 **Purpose:** Profile, preferences (lang/theme), security (password change).
 **Key IDs:** `#settings-fname`, `#settings-email` (disabled), `#settings-diabetes-type`, `#settings-lang`, `#settings-theme`, `#settings-password`, `#btn-update-profile`, `#btn-change-password`
 **Scripts:** `i18n.js`, then `settings.js`, then `script.js` (module).
-**Gotcha:** Password change is a stub — it just shows an `alert()`. See Tech Debt §11.
+**Gotcha:** Password change is a stub — it now shows a toast notification via `window.showToast()`. See Tech Debt §11.
 
-### 3.6 `front/log in/script.js` (386 lines) — **CORE FILE**
+### 3.6 `front/log in/script.js` (386→722 lines) — **CORE FILE**
 **Type:** ES module (loaded with `type="module"`).
 **Firebase config:** hardcoded at `script.js:5-13`. Treat as a public identifier.
 **Exports / globals it creates:**
@@ -135,6 +135,7 @@ There is **no `src/`, no `dist/`, no `assets/`, no `tests/`** folder. Everything
   - `updateProfile(fname, type)` — `setDoc(..., { merge: true })` against `users/{uid}`
   - `logout()` — `signOut(auth)` + clear all diacare-related LocalStorage keys
 - `window.switchTab(tab)` — toggles login/signup forms
+- `window.showToast(msg, type)` — renders a toast notification (`'success'`, `'error'`, or `'info'`); auto-dismisses after 4s
 - `window.chatBotAttached` — guard flag for the chatbot listener
 
 **Auth flow:** `onAuthStateChanged` is the source of truth. On login it reads `users/{uid}` doc and writes `diacare_user_fname` + `diacare_diabetes_type` to LocalStorage, then calls `syncLogs` for all 3 tables, then dispatches `logsSynced` event (which `reports.js` listens for).
@@ -171,8 +172,8 @@ There is **no `src/`, no `dist/`, no `assets/`, no `tests/`** folder. Everything
 - Logout handler.
 **State:** `window.selectedDietType` persists user's current selection across re-renders.
 
-### 3.10 `front/log in/reports.js` (307 lines)
-**Type:** Classic script.
+### 3.10 `front/log in/reports.js` (~345 lines)
+**Type:** ES module (`type="module"`). Imports `{ auth, db }` from `firebase-config.js` and saves daily report summaries (`users/{uid}/reports/{date}`) to Firestore.
 **Responsibilities:**
 - Theme + language toggle (duplicated)
 - Greeting text (duplicated)
@@ -181,7 +182,7 @@ There is **no `src/`, no `dist/`, no `assets/`, no `tests/`** folder. Everything
   - Average glucose
   - **Estimated A1C** = `((avg + 46.7) / 28.7).toFixed(1)` (DCCT/ADAG approximation)
   - Time-in-range percentages (`<70`, `70–180`, `>180`)
-  - Groups readings by calendar date, averages multiple readings per day → Chart.js line chart with one averaged point per day (last 30 days), red markers for out-of-range, tooltip shows `Avg: X mg/dL (from N readings)` in EN/AR
+  - 30 most recent readings → Chart.js line chart with red point markers for out-of-range
 - PDF export via `html2pdf()` — clones `.main-content`, removes header/controls/export card, converts chart canvas to data-URL image, generates A4 PDF named `DiaCare_Report_YYYY-MM-DD.pdf`.
 - Listens to `languageChanged`, `logsSynced`, `userDataLoaded` to re-render.
 
@@ -193,11 +194,11 @@ There is **no `src/`, no `dist/`, no `assets/`, no `tests/`** folder. Everything
 - `#btn-update-profile` — saves fname + diabetes type to LocalStorage, calls `DiaCareDB.updateProfile(...)` (which writes to Firestore)
 - `#settings-lang` change → `updateLanguage(value)` (re-uses `i18n.js` function)
 - `#settings-theme` change → simulates click on `#theme-toggle`
-- `#btn-change-password` — **stub** that just shows an alert
+- `#btn-change-password` — **stub** that shows a toast via `window.showToast()`
 - Greeting text
 - Chatbot (duplicated)
 
-### 3.12 `front/log in/styles.css` (1072 lines)
+### 3.12 `front/log in/styles.css` (1072→1443 lines)
 **Structure (top-down):**
 - `:root` CSS variables (light theme palette)
 - `[data-theme="dark"]` overrides
@@ -213,6 +214,7 @@ There is **no `src/`, no `dist/`, no `assets/`, no `tests/`** folder. Everything
 - `.progress-container`, `.progress-bar`
 - `.status-badge-container`, `.badge`, `.badge-default`
 - `.chatbot-widget`, `.chatbot-btn`, `.chatbot-window`, `.chat-header`, `.chat-messages`, `.message.msg-user/msg-ai`, `.typing-indicator`, `.typing-dot`
+- `.toast-container`, `.toast`, `.toast.is-success/error/info` + `@keyframes toastIn` (global toast/snackbar system)
 - `@keyframes fadeIn`, `flashRedAlert`, `flashRedAlertDark` (dashboard injects these via inline `<style>` in its `<head>`)
 - Responsive breakpoints at 992px and 640px
 
@@ -590,7 +592,7 @@ The toggle logic is **duplicated in 4 files** (`script.js`, `nutrition.js`, `rep
 | 4 | **Auto-redirect commented out** in `script.js:142-150`. Authenticated users must manually navigate to dashboard. | `script.js:142-150` | Low | Re-enable with a guard for `/index.html` only. |
 | 5 | **`dailyBgChart` canvas exists** in `dashboard.html` but `renderDailyChart()` is never defined. | `dashboard.html:455`, all JS files | Medium | Either implement the function or remove the canvas and chart card. |
 | 6 | **`#user-physio-context` and `#meal-search-input`** are referenced in `dashboard.html` inline JS but not in the DOM. | `dashboard.html:491, 499` | Low | Remove references or add the missing elements. |
-| 7 | **Password change is a stub** — just an `alert()`. | `settings.js:98-105` | Medium | Wire to Firebase Auth `updatePassword(currentUser, newPassword)`. Requires re-auth. |
+| 7 | **Password change is a stub** — shows a toast (was `alert()` before toast migration). | `settings.js:98-105` | Medium | Wire to Firebase Auth `updatePassword(currentUser, newPassword)`. Requires re-auth. |
 | 8 | **Time-in-range bars** in `reports.js:197-204` reference IDs that don't exist in `reports.html`. | `reports.js:197-204`, `reports.html:104-134` | Low | Either add the IDs or rewrite to update the existing inline-style bars. |
 | 9 | **`physioContextSelect` fallback to `'none'`** is dead code — selector never exists. | `dashboard.html:551` | Low | Clean up. |
 | 10 | **Two `<span data-i18n>` button labels** in `#btn-analyze-ai` both render. | `dashboard.html:435-436` | Low | Remove the `calculateDose` one (looks like a leftover from a rename). |
@@ -633,10 +635,10 @@ The toggle logic is **duplicated in 4 files** (`script.js`, `nutrition.js`, `rep
 Critical: `diacare_user_fname`, `diacare_diabetes_type`, `diacare_lang`, `diacare_theme`, `diacare_last_glucose`, `db_glucose`, `db_weight`, `db_meals`. Removing or renaming any of these requires a data migration.
 
 ### 12.3 CSS Class Hooks
-`.dashboard-container`, `.dashboard-body`, `.sidebar`, `.sidebar-nav`, `.sidebar-logo`, `.user-type-selector`, `.main-content`, `.main-header`, `.header-logo`, `.header-controls`, `.user-profile`, `.card`, `.blood-sugar-card`, `.weight-card`, `.meal-tracker-card`, `.bolus-calculator-card`, `.suggestion-card`, `.chart-card`, `.glucose-input-wrapper`, `.meal-calculations`, `.calc-item`, `.calc-label`, `.calc-value`, `.status-badge-container`, `.badge`, `.badge-default`, `.progress-container`, `.progress-bar`, `.health-banner`, `.banner-content`, `.btn-explain-ai`, `.flash-red-alert`, `.chatbot-widget`, `.chatbot-btn`, `.chatbot-window`, `.chat-header`, `.close-chat`, `.chat-messages`, `.message.msg-user`, `.message.msg-ai`, `.chat-input-area`, `.chat-send-btn`, `.typing-indicator`, `.typing-dot`, `.info-section`, `.info-content`, `.background-decorations`, `.circle`, `.circle-1`, `.circle-2`, `.container`, `.form-section`, `.form-container`, `.tabs`, `.tab.active`, `.form-active`, `.form-hidden`, `.input-group`, `.row`, `.btn-primary`, `.btn-secondary`, `.terms`, `.forgot-password`, `.checkbox-label`, `.form-options`, `.form-header`, `[data-theme="dark"]`, `[dir="rtl"]`
+`.dashboard-container`, `.dashboard-body`, `.sidebar`, `.sidebar-nav`, `.sidebar-logo`, `.user-type-selector`, `.main-content`, `.main-header`, `.header-logo`, `.header-controls`, `.user-profile`, `.card`, `.blood-sugar-card`, `.weight-card`, `.meal-tracker-card`, `.bolus-calculator-card`, `.suggestion-card`, `.chart-card`, `.glucose-input-wrapper`, `.meal-calculations`, `.calc-item`, `.calc-label`, `.calc-value`, `.status-badge-container`, `.badge`, `.badge-default`, `.progress-container`, `.progress-bar`, `.health-banner`, `.banner-content`, `.btn-explain-ai`, `.flash-red-alert`, `.toast-container`, `.toast`, `.toast.is-success`, `.toast.is-error`, `.toast.is-info`, `@keyframes toastIn`, `.chatbot-widget`, `.chatbot-btn`, `.chatbot-window`, `.chat-header`, `.close-chat`, `.chat-messages`, `.message.msg-user`, `.message.msg-ai`, `.chat-input-area`, `.chat-send-btn`, `.typing-indicator`, `.typing-dot`, `.info-section`, `.info-content`, `.background-decorations`, `.circle`, `.circle-1`, `.circle-2`, `.container`, `.form-section`, `.form-container`, `.tabs`, `.tab.active`, `.form-active`, `.form-hidden`, `.input-group`, `.row`, `.btn-primary`, `.btn-secondary`, `.terms`, `.forgot-password`, `.checkbox-label`, `.form-options`, `.form-header`, `[data-theme="dark"]`, `[dir="rtl"]`
 
 ### 12.4 Globals
-`window.DiaCareDB`, `window.DiaCareDB.init/addLog/getLogs/syncLogs/updateProfile/logout`, `window.switchTab`, `window.chatBotAttached`, `window.selectedDietType`, `window.dictionary`, `window.applyTranslations`, `window.updateLanguage`, `window.updateDashboard` (referenced by `i18n.js` and `dashboard.html`)
+`window.DiaCareDB`, `window.DiaCareDB.init/addLog/getLogs/syncLogs/updateProfile/logout`, `window.switchTab`, `window.showToast`, `window.chatBotAttached`, `window.selectedDietType`, `window.dictionary`, `window.applyTranslations`, `window.updateLanguage`, `window.updateDashboard` (referenced by `i18n.js` and `dashboard.html`)
 
 ### 12.5 Custom Events
 `userDataLoaded`, `logsSynced`, `languageChanged`
@@ -699,43 +701,6 @@ Glucose, weight, and meal logs are mirrored to `localStorage` in plaintext. On a
 ### 13.6 Password Storage
 `script.js:234` explicitly notes: "Passwords are not stored locally for security". Verified — no password is written to LocalStorage or sessionStorage. Good.
 
-### 13.7 Firebase Auth — Authorized Domains (`auth/unauthorized-domain`)
-
-**Symptom:** User clicks "Continue with Google" (or any Firebase Auth provider). The popup either fails to open or returns:
-`FirebaseError: Firebase: Error (auth/unauthorized-domain)`.
-
-**Root cause:** Firebase rejects any sign-in attempt whose `window.location.origin` is not in the project's **Authentication → Settings → Authorized domains** allowlist. The check happens server-side before Google is ever contacted. Popups and redirect flows are both affected. The current page origin is logged by `script.js` on every Google sign-in attempt (`Google sign-in error: ... | origin = ...`).
-
-**Project:** `dia-care-86f57` (see `script.js:8`). Default allowlist typically contains only `localhost` and the project's `firebaseapp.com` / `web.app` hosts.
-
-**Fix (one-time per host):**
-1. Open https://console.firebase.google.com/ → project **`dia-care-86f57`**.
-2. **Build → Authentication → Settings → Authorized domains** → **Add domain**.
-3. Enter the host **only** (no scheme, no path, no port). Common entries for this project:
-   - `localhost` — usually present by default. Confirm.
-   - `127.0.0.1` — add if anyone develops against the raw IP.
-   - LAN IP of the dev machine (e.g., `192.168.1.42`) — for phone testing.
-   - The eventual production domain (e.g., `diacare.example.com`).
-4. Save. Propagation is ~1 minute; no client redeploy required.
-
-**Common gotchas:**
-- The auth-domain itself (`dia-care-86f57.firebaseapp.com`, `script.js:7`) is **not** the user's app host. Adding it does **not** authorize `localhost`.
-- The Live Server dev origin is `http://localhost:5501` (AGENTS.md §4). Port is normally irrelevant to the allowlist — Firebase matches the host.
-- Some browsers resolve `http://localhost` and `http://127.0.0.1` to different origins. If the team standardizes on `localhost`, do not add `127.0.0.1` unless needed.
-- Tunneled preview URLs (`*.ngrok.io`, `*.trycloudflare.com`, Vercel/Netlify previews) change per session and must be added each time, or — for production previews — use a stable host.
-- `auth/operation-not-allowed` (also handled in `ERROR_MAP`) is a **different** error: the Google provider is disabled under Sign-in method. Fix path is the same console, different section.
-
-**Code references:**
-- Error message: `script.js` → `ERROR_MAP['auth/unauthorized-domain']` and `ERROR_MAP['auth/popup-blocked']` (added 2026-06-06).
-- Origin in error UI: `tr(code, { origin: window.location.origin })` in `showFormError()`.
-- Origin in console: catch block in the Google button handler.
-- Dev IP warning: IIFE `warnOnNonLocalhostHost()` at top of `DOMContentLoaded` handler.
-
-**Pre-launch checklist item:**
-- [ ] All production hostnames (apex + subdomains used for the SPA) added to **Authorized domains** for project `dia-care-86f57`.
-- [ ] App tested once from each prod hostname to confirm the popup opens.
-- [ ] The dev hosts (`localhost`, `127.0.0.1`, any LAN IP used for phone testing) added for the dev/staging project.
-
 ---
 
 ## 14. Quick Reference
@@ -752,10 +717,9 @@ Glucose, weight, and meal logs are mirrored to `localStorage` in plaintext. On a
 | Add a chart | `reports.js` (Chart.js) — see existing `monthlyTrendChart` |
 | Export a new PDF | `reports.js` `btn-export-pdf` handler (html2pdf.js) |
 | Fix the chatbot | All 4 JS files (must stay in sync) |
-| Add a Firebase Auth host | Firebase Console → Authentication → Settings → Authorized domains (see §13.7) |
 | Run locally | VS Code → Right-click `index.html` → Open with Live Server (port 5501) |
 | Run backend | `cd "C:\Users\DELL\Desktop\project_final\DiaCare-Project" && npm install && node "front/log in/server.js"` |
 
 ---
 
-*Last updated: 2026-06-06. If the project structure changes, update sections §2 (Directory Map), §3 (Key Files), and §12 (Do-Not-Break List) at minimum. New since 2026-06-06: §13.7 (Firebase Auth authorized domains — fixes `auth/unauthorized-domain`); `script.js` adds `auth/unauthorized-domain` and `auth/popup-blocked` to `ERROR_MAP`, logs `window.location.origin` on Google sign-in errors, and warns when the page is loaded from a raw IP host.*
+*Last updated: 2026-06-06. If the project structure changes, update sections §2 (Directory Map), §3 (Key Files), and §12 (Do-Not-Break List) at minimum.*

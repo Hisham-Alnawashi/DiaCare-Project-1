@@ -873,6 +873,31 @@ body.dashboard-body {
     transition: width 0.3s ease;
 }
 
+/* ========== Hamburger Menu Button (hidden on desktop) ========== */
+.hamburger-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    color: var(--text-main);
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding: 0.5rem 0.7rem;
+    border-radius: 8px;
+    transition: background 0.2s, border-color 0.2s;
+}
+.hamburger-btn:hover {
+    background: var(--input-bg);
+    border-color: var(--primary-light);
+}
+
+/* ========== Sidebar Overlay Backdrop (hidden on desktop) ========== */
+.sidebar-overlay {
+    display: none;
+}
+
+/* ========== Dashboard Mobile Responsive ========== */
 @media (max-width: 768px) {
     body.dashboard-body {
         height: auto;
@@ -884,6 +909,7 @@ body.dashboard-body {
         height: auto;
     }
 
+    /* -- Forward-compatible defaults for pages without hamburger -- */
     .sidebar {
         width: 100%;
         padding: 1rem 0;
@@ -900,8 +926,105 @@ body.dashboard-body {
         white-space: nowrap;
     }
 
+    /* -- Global dashboard layout improvements -- */
     .main-content {
         padding: 1.5rem;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .card {
+        padding: 1rem;
+    }
+
+    .main-header {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .dashboard-body .row {
+        flex-direction: column;
+    }
+
+    .health-banner {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .meal-calculations {
+        padding: 0.75rem;
+    }
+
+    .chart-placeholder {
+        height: 220px;
+        padding: 12px;
+    }
+
+    /* -- Hamburger-nav overrides (dashboard page) -- */
+    .hamburger-nav .hamburger-btn {
+        display: flex;
+    }
+
+    .hamburger-nav .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 280px;
+        height: 100vh;
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        padding: 2rem 0;
+        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.2);
+    }
+    .hamburger-nav .sidebar.active {
+        transform: translateX(0);
+    }
+
+    [dir="rtl"] .hamburger-nav .sidebar {
+        left: auto;
+        right: 0;
+        transform: translateX(100%);
+        box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2);
+    }
+    [dir="rtl"] .hamburger-nav .sidebar.active {
+        transform: translateX(0);
+    }
+
+    .hamburger-nav .sidebar-overlay {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    .hamburger-nav .sidebar-overlay.active {
+        opacity: 1;
+        pointer-events: all;
+    }
+
+    .hamburger-nav .sidebar-nav {
+        flex-direction: column;
+        overflow-x: visible;
+        padding: 0 1rem;
+        flex: 1;
+    }
+
+    .hamburger-nav .nav-item {
+        white-space: normal;
+    }
+
+    .hamburger-nav.sidebar-open {
+        overflow: hidden;
     }
 }
 
@@ -1439,5 +1562,67 @@ select.is-valid {
 
     40% {
         transform: scale(1);
+    }
+}
+
+/* ========== Small Mobile (< 480px) ========== */
+@media (max-width: 480px) {
+    .main-header h2 {
+        display: none;
+    }
+
+    #user-greeting {
+        display: none;
+    }
+
+    .card {
+        padding: 0.75rem;
+    }
+
+    .glucose-input-wrapper .btn-secondary {
+        padding: 0 0.75rem;
+    }
+
+    .health-banner {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .health-banner .btn-explain-ai {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .meal-calculations {
+        padding: 0.5rem;
+    }
+
+    .chart-placeholder {
+        height: 180px;
+        padding: 8px;
+    }
+
+    #btn-analyze-ai span:last-child {
+        display: none;
+    }
+}
+
+/* ========== Very Narrow Phones (< 420px) ========== */
+@media (max-width: 420px) {
+    .chatbot-window {
+        width: calc(100vw - 1rem);
+        right: 0.5rem;
+    }
+
+    [dir="rtl"] .chatbot-window {
+        right: auto;
+        left: 0.5rem;
+    }
+}
+
+/* ========== iPhone SE / Very Small (< 380px) ========== */
+@media (max-width: 380px) {
+    .chatbot-window {
+        height: 400px;
     }
 }
